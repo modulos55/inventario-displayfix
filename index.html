@@ -239,6 +239,12 @@ function hoyStr() { return new Date().toLocaleDateString("es-AR"); }
 function nowHora() { return new Date().toLocaleTimeString("es-AR", { hour:"2-digit", minute:"2-digit" }); }
 function esc(s) { return String(s == null ? "" : s).replace(/"/g, "&quot;"); }
 function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-"); }
+function medioLabel(medio) {
+  if (medio === "tarjeta") return "💳 Tarjeta";
+  if (medio === "efectivo") return "💵 Efectivo";
+  if (medio === "transferencia") return "🏦 Transferencia";
+  return "— sin especificar";
+}
 
 // ───────────────────────────── CATEGORÍAS POR DEFECTO (Fundas / Módulos) ─────────────────────────────
 function buildDefaultCategorias() {
@@ -386,7 +392,13 @@ function renderVenta() {
 
   const ticketRows = window._ST.ventasHoy.length
     ? window._ST.ventasHoy.slice().reverse().map((t) =>
-        `<div class="tape-row"><span>${t.hora} · ${esc(t.nombre)}</span><span class="mono">${money(t.precio)} <span class="gain">(+${money(t.ganancia)})</span></span></div>`
+        `<div class="tape-row" style="flex-direction:column;align-items:flex-start;gap:2px;">
+           <div style="display:flex;justify-content:space-between;width:100%;">
+             <span>${t.hora} · ${esc(t.nombre)}</span>
+             <span class="mono">${money(t.precio)} <span class="gain">(+${money(t.ganancia)})</span></span>
+           </div>
+           <div style="font-size:10.5px;color:#9A9DA5;">${medioLabel(t.medioPago)}</div>
+         </div>`
       ).join("")
     : `<div class="tape-empty">Tocá un producto arriba para registrar la primera venta.</div>`;
 
@@ -440,21 +452,23 @@ window.abrirConfirmVenta = function (id) {
   if (!p) return;
   abrirModal(`
     <h2>Vender ${esc(p.nombre)}</h2>
-    <div class="hint">Precio predeterminado: ${money(p.precio)}. Editalo si vendiste a otro valor.</div>
+    <div class="hint">Precio predeterminado: ${money(p.precio)}. Editalo si vendiste a otro valor, y elegí cómo te pagaron.</div>
     <label class="lbl">Precio de venta</label>
     <input type="number" id="confirmVentaPrecio" class="mono" value="${p.precio}" style="font-size:18px;padding:10px 12px;margin-bottom:14px;">
-    <div class="btn-row">
-      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
-      <button class="btn btn-orange" onclick="registrarVenta('${id}')">Registrar venta</button>
-    </div>`);
+    <div class="btn-row" style="margin-bottom:8px;">
+      <button class="btn btn-orange" style="flex:1;padding:12px 0;" onclick="registrarVenta('${id}','tarjeta')">💳 Tarjeta</button>
+      <button class="btn" style="flex:1;background:#2E9C6F;color:#fff;padding:12px 0;" onclick="registrarVenta('${id}','efectivo')">💵 Efectivo</button>
+      <button class="btn" style="flex:1;background:#3A7BD5;color:#fff;padding:12px 0;" onclick="registrarVenta('${id}','transferencia')">🏦 Transf.</button>
+    </div>
+    <button class="btn btn-ghost" style="width:100%;" onclick="cerrarModal()">Cancelar</button>`);
 };
 
-window.registrarVenta = function (id) {
+window.registrarVenta = function (id, medioPago) {
   const p = window._ST.products.find((x) => x.id === id);
   if (!p) return;
   const precioFinal = Number(document.getElementById("confirmVentaPrecio").value) || p.precio;
   const ganancia = precioFinal - p.costo;
-  window._ST.ventasHoy = [{ id: String(Date.now()), nombre: p.nombre, precio: precioFinal, ganancia, hora: nowHora() }, ...window._ST.ventasHoy];
+  window._ST.ventasHoy = [{ id: String(Date.now()), nombre: p.nombre, precio: precioFinal, ganancia, hora: nowHora(), medioPago }, ...window._ST.ventasHoy];
   p.stock = Math.max(0, p.stock - 1);
   guardarVentasHoy();
   guardarProducts();
@@ -722,11 +736,14 @@ window.abrirConfirmVentaItemSimple = function (catId, itemId) {
     <h2>${esc(it.nombre)}</h2>
     <div class="hint">Stock: ${it.stock}. Elegí cómo te pagaron:</div>
     <div class="btn-row" style="margin-bottom:8px;">
-      <button class="btn btn-orange" style="flex:1;display:flex;flex-direction:column;gap:2px;padding:14px 0;" onclick="registrarVentaItemSimple('${catId}','${itemId}','lista')">
-        <span style="font-size:11px;font-weight:600;">💳 Lista</span><span class="mono" style="font-size:16px;">${money(it.precioLista)}</span>
+      <button class="btn btn-orange" style="flex:1;display:flex;flex-direction:column;gap:2px;padding:12px 0;" onclick="registrarVentaItemSimple('${catId}','${itemId}','lista','tarjeta')">
+        <span style="font-size:10.5px;font-weight:600;">💳 Tarjeta</span><span class="mono" style="font-size:14px;">${money(it.precioLista)}</span>
       </button>
-      <button class="btn" style="flex:1;background:#2E9C6F;color:#fff;display:flex;flex-direction:column;gap:2px;padding:14px 0;" onclick="registrarVentaItemSimple('${catId}','${itemId}','efectivo')">
-        <span style="font-size:11px;font-weight:600;">💵 Efectivo/Transf.</span><span class="mono" style="font-size:16px;">${money(it.precioEfectivo)}</span>
+      <button class="btn" style="flex:1;background:#2E9C6F;color:#fff;display:flex;flex-direction:column;gap:2px;padding:12px 0;" onclick="registrarVentaItemSimple('${catId}','${itemId}','efectivo','efectivo')">
+        <span style="font-size:10.5px;font-weight:600;">💵 Efectivo</span><span class="mono" style="font-size:14px;">${money(it.precioEfectivo)}</span>
+      </button>
+      <button class="btn" style="flex:1;background:#3A7BD5;color:#fff;display:flex;flex-direction:column;gap:2px;padding:12px 0;" onclick="registrarVentaItemSimple('${catId}','${itemId}','efectivo','transferencia')">
+        <span style="font-size:10.5px;font-weight:600;">🏦 Transf.</span><span class="mono" style="font-size:14px;">${money(it.precioEfectivo)}</span>
       </button>
     </div>
     <button class="btn-text-red" style="color:#7A7D85;" onclick="abrirOtroMontoItemSimple('${catId}','${itemId}')">✎ Cobré otro monto</button>
@@ -738,17 +755,23 @@ window.abrirOtroMontoItemSimple = function (catId, itemId) {
     <h2>${esc(it.nombre)} — otro monto</h2>
     <label class="lbl">Precio de venta</label>
     <input type="number" id="otroMontoItem" class="mono" value="${it.precioLista}" style="font-size:18px;padding:10px 12px;margin-bottom:14px;">
+    <label class="lbl">¿Cómo te pagaron?</label>
+    <div style="display:flex;gap:8px;margin:6px 0 14px;">
+      <label style="display:flex;gap:5px;align-items:center;font-size:12.5px;"><input type="radio" name="otroMedioItem" value="tarjeta" checked style="width:auto;">💳 Tarjeta</label>
+      <label style="display:flex;gap:5px;align-items:center;font-size:12.5px;"><input type="radio" name="otroMedioItem" value="efectivo" style="width:auto;">💵 Efectivo</label>
+      <label style="display:flex;gap:5px;align-items:center;font-size:12.5px;"><input type="radio" name="otroMedioItem" value="transferencia" style="width:auto;">🏦 Transf.</label>
+    </div>
     <div class="btn-row">
       <button class="btn btn-ghost" onclick="abrirConfirmVentaItemSimple('${catId}','${itemId}')">Volver</button>
-      <button class="btn btn-orange" onclick="registrarVentaItemSimple('${catId}','${itemId}','otro')">Registrar venta</button>
+      <button class="btn btn-orange" onclick="registrarVentaItemSimple('${catId}','${itemId}','otro', document.querySelector('input[name=otroMedioItem]:checked').value)">Registrar venta</button>
     </div>`);
 };
-window.registrarVentaItemSimple = function (catId, itemId, tipo) {
+window.registrarVentaItemSimple = function (catId, itemId, tipo, medioPago) {
   const it = getItemSimple(catId, itemId);
   if (!it) return;
   const precioFinal = tipo === "lista" ? it.precioLista : tipo === "efectivo" ? it.precioEfectivo : Number(document.getElementById("otroMontoItem").value) || it.precioLista;
   const ganancia = precioFinal - it.costo;
-  window._ST.ventasHoy = [{ id: String(Date.now()), nombre: it.nombre, precio: precioFinal, ganancia, hora: nowHora() }, ...window._ST.ventasHoy];
+  window._ST.ventasHoy = [{ id: String(Date.now()), nombre: it.nombre, precio: precioFinal, ganancia, hora: nowHora(), medioPago }, ...window._ST.ventasHoy];
   it.stock = Math.max(0, it.stock - 1);
   guardarVentasHoy();
   guardarCategorias();
@@ -962,11 +985,14 @@ window.abrirConfirmVentaModelo = function (catId, marcaId, modeloId) {
     <h2>${esc(marca.nombre)} ${esc(mo.nombre)}</h2>
     <div class="hint">Stock: ${mo.stock}. Elegí cómo te pagaron:</div>
     <div class="btn-row" style="margin-bottom:8px;">
-      <button class="btn btn-orange" style="flex:1;display:flex;flex-direction:column;gap:2px;padding:14px 0;" onclick="registrarVentaModelo('${catId}','${marcaId}','${modeloId}','lista')">
-        <span style="font-size:11px;font-weight:600;">💳 Lista</span><span class="mono" style="font-size:16px;">${money(mo.precioLista)}</span>
+      <button class="btn btn-orange" style="flex:1;display:flex;flex-direction:column;gap:2px;padding:12px 0;" onclick="registrarVentaModelo('${catId}','${marcaId}','${modeloId}','lista','tarjeta')">
+        <span style="font-size:10.5px;font-weight:600;">💳 Tarjeta</span><span class="mono" style="font-size:14px;">${money(mo.precioLista)}</span>
       </button>
-      <button class="btn" style="flex:1;background:#2E9C6F;color:#fff;display:flex;flex-direction:column;gap:2px;padding:14px 0;" onclick="registrarVentaModelo('${catId}','${marcaId}','${modeloId}','efectivo')">
-        <span style="font-size:11px;font-weight:600;">💵 Efectivo/Transf.</span><span class="mono" style="font-size:16px;">${money(mo.precioEfectivo)}</span>
+      <button class="btn" style="flex:1;background:#2E9C6F;color:#fff;display:flex;flex-direction:column;gap:2px;padding:12px 0;" onclick="registrarVentaModelo('${catId}','${marcaId}','${modeloId}','efectivo','efectivo')">
+        <span style="font-size:10.5px;font-weight:600;">💵 Efectivo</span><span class="mono" style="font-size:14px;">${money(mo.precioEfectivo)}</span>
+      </button>
+      <button class="btn" style="flex:1;background:#3A7BD5;color:#fff;display:flex;flex-direction:column;gap:2px;padding:12px 0;" onclick="registrarVentaModelo('${catId}','${marcaId}','${modeloId}','efectivo','transferencia')">
+        <span style="font-size:10.5px;font-weight:600;">🏦 Transf.</span><span class="mono" style="font-size:14px;">${money(mo.precioEfectivo)}</span>
       </button>
     </div>
     <button class="btn-text-red" style="color:#7A7D85;" onclick="abrirOtroMontoModelo('${catId}','${marcaId}','${modeloId}')">✎ Cobré otro monto</button>
@@ -978,18 +1004,24 @@ window.abrirOtroMontoModelo = function (catId, marcaId, modeloId) {
     <h2>${esc(mo.nombre)} — otro monto</h2>
     <label class="lbl">Precio de venta</label>
     <input type="number" id="otroMontoModelo" class="mono" value="${mo.precioLista}" style="font-size:18px;padding:10px 12px;margin-bottom:14px;">
+    <label class="lbl">¿Cómo te pagaron?</label>
+    <div style="display:flex;gap:8px;margin:6px 0 14px;">
+      <label style="display:flex;gap:5px;align-items:center;font-size:12.5px;"><input type="radio" name="otroMedioModelo" value="tarjeta" checked style="width:auto;">💳 Tarjeta</label>
+      <label style="display:flex;gap:5px;align-items:center;font-size:12.5px;"><input type="radio" name="otroMedioModelo" value="efectivo" style="width:auto;">💵 Efectivo</label>
+      <label style="display:flex;gap:5px;align-items:center;font-size:12.5px;"><input type="radio" name="otroMedioModelo" value="transferencia" style="width:auto;">🏦 Transf.</label>
+    </div>
     <div class="btn-row">
       <button class="btn btn-ghost" onclick="abrirConfirmVentaModelo('${catId}','${marcaId}','${modeloId}')">Volver</button>
-      <button class="btn btn-orange" onclick="registrarVentaModelo('${catId}','${marcaId}','${modeloId}','otro')">Registrar venta</button>
+      <button class="btn btn-orange" onclick="registrarVentaModelo('${catId}','${marcaId}','${modeloId}','otro', document.querySelector('input[name=otroMedioModelo]:checked').value)">Registrar venta</button>
     </div>`);
 };
-window.registrarVentaModelo = function (catId, marcaId, modeloId, tipo) {
+window.registrarVentaModelo = function (catId, marcaId, modeloId, tipo, medioPago) {
   const mo = getModelo(catId, marcaId, modeloId);
   const marca = getMarca(catId, marcaId);
   if (!mo) return;
   let precioFinal = tipo === "lista" ? mo.precioLista : tipo === "efectivo" ? mo.precioEfectivo : Number(document.getElementById("otroMontoModelo").value) || mo.precioLista;
   const ganancia = precioFinal - mo.costo;
-  window._ST.ventasHoy = [{ id: String(Date.now()), nombre: `${marca.nombre} ${mo.nombre}`, precio: precioFinal, ganancia, hora: nowHora() }, ...window._ST.ventasHoy];
+  window._ST.ventasHoy = [{ id: String(Date.now()), nombre: `${marca.nombre} ${mo.nombre}`, precio: precioFinal, ganancia, hora: nowHora(), medioPago }, ...window._ST.ventasHoy];
   mo.stock = Math.max(0, mo.stock - 1);
   guardarVentasHoy();
   guardarCategorias();
@@ -1305,7 +1337,14 @@ function calcularCierre() {
   const totalGanancia = window._ST.ventasHoy.reduce((a, t) => a + t.ganancia, 0);
   const hoy = hoyStr();
   const gastosHoy = window._ST.gastos.filter((g) => g.fecha === hoy).reduce((a, g) => a + g.monto, 0);
-  return { fecha: hoy, cantidad: window._ST.ventasHoy.length, totalVentas, totalGanancia, gastosHoy, gananciaNeta: totalGanancia - gastosHoy };
+  const porMedio = { tarjeta: 0, efectivo: 0, transferencia: 0, sinEspecificar: 0 };
+  window._ST.ventasHoy.forEach((t) => {
+    if (t.medioPago === "tarjeta") porMedio.tarjeta += t.precio;
+    else if (t.medioPago === "efectivo") porMedio.efectivo += t.precio;
+    else if (t.medioPago === "transferencia") porMedio.transferencia += t.precio;
+    else porMedio.sinEspecificar += t.precio;
+  });
+  return { fecha: hoy, cantidad: window._ST.ventasHoy.length, totalVentas, totalGanancia, gastosHoy, gananciaNeta: totalGanancia - gastosHoy, porMedio };
 }
 window.cerrarCajaManual = function () { mostrarCierre(calcularCierre(), false); }
 function chequearCierreAutomatico() {
@@ -1318,12 +1357,19 @@ function chequearCierreAutomatico() {
 function mostrarCierre(info, automatico) {
   window._fbSet && window._fbSet("ultimoCierre", info.fecha);
   window._ST.ultimoCierre = info.fecha;
+  const sinEspecificarLine = info.porMedio.sinEspecificar
+    ? `<div class="report-line"><span>— Sin especificar</span><span class="mono">${money(info.porMedio.sinEspecificar)}</span></div>`
+    : "";
   abrirModal(`
     <h2>${automatico ? "Cierre automático — 17:15" : "Cierre de caja"}</h2>
     <div class="hint" style="margin-bottom:16px;">${info.fecha}</div>
     <div class="report-box">
       <div class="report-line"><span>Ventas registradas</span><span class="mono" style="font-weight:600;">${info.cantidad}</span></div>
-      <div class="report-line top"><span>Total vendido</span><span class="mono" style="font-weight:600;">${money(info.totalVentas)}</span></div>
+      <div class="report-line top"><span>💳 Tarjeta</span><span class="mono">${money(info.porMedio.tarjeta)}</span></div>
+      <div class="report-line"><span>💵 Efectivo</span><span class="mono">${money(info.porMedio.efectivo)}</span></div>
+      <div class="report-line"><span>🏦 Transferencia</span><span class="mono">${money(info.porMedio.transferencia)}</span></div>
+      ${sinEspecificarLine}
+      <div class="report-line top bold"><span>Monto final (total vendido)</span><span class="mono" style="font-weight:600;">${money(info.totalVentas)}</span></div>
       <div class="report-line top bold"><span>Ganancia bruta</span><span class="mono" style="color:#2E9C6F;">${money(info.totalGanancia)}</span></div>
       <div class="report-line top"><span>Gastos de hoy</span><span class="mono" style="color:#E5484D;">− ${money(info.gastosHoy)}</span></div>
       <div class="report-line top bold" style="border-top:1px solid #D8D4CB;"><span>Ganancia neta</span><span class="mono">${money(info.gananciaNeta)}</span></div>
