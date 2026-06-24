@@ -43,6 +43,15 @@ body { margin:0; font-family:'Inter',sans-serif; background:#15171B; color:#FAF8
 .move-row { display:flex; justify-content:space-between; margin-top:6px; }
 .move-btn { background:#1F2023; color:#FAF8F3; border:none; border-radius:6px; width:22px; height:22px; display:flex; align-items:center; justify-content:center; cursor:pointer; }
 .move-btn:disabled { opacity:0.25; }
+.tile-categoria { background:linear-gradient(160deg, #262931, #1C1E23); box-shadow:0 8px 16px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.04); }
+.tile-categoria .tile-name, .tile-categoria .tile-stock { color:#FAF8F3; }
+.tile-categoria .tile-stock { color:#8C8F97; }
+.folder3d { width:38px; height:28px; position:relative; margin-bottom:8px; }
+.folder3d .back { position:absolute; inset:0; top:4px; background:#3A3E47; border-radius:3px 7px 7px 7px; }
+.folder3d .back::before { content:""; position:absolute; top:-5px; left:3px; width:15px; height:7px; background:#3A3E47; border-radius:3px 3px 0 0; }
+.folder3d .front { position:absolute; left:0; right:0; bottom:0; height:62%; background:linear-gradient(160deg, #FF9456, #FF7A30); border-radius:3px 7px 7px 7px; box-shadow:0 4px 8px rgba(255,122,48,0.35), 0 2px 4px rgba(0,0,0,0.3); }
+.tile-categoria.add-cat { background:transparent; box-shadow:none; }
+
 .tape { background:#1F2228; border-radius:14px; overflow:hidden; margin-bottom:10px; }
 .perforate { height:10px; background-image:radial-gradient(circle, #15171B 4px, transparent 4.5px); background-size:16px 10px; background-position:4px 0; }
 .tape-inner { padding:12px 16px; }
@@ -264,6 +273,20 @@ function getMarca(catId, marcaId) { const c = getCategoria(catId); return c && c
 function getModelo(catId, marcaId, modeloId) { const m = getMarca(catId, marcaId); return m && m.modelos.find((x) => x.id === modeloId); }
 function getItemSimple(catId, itemId) { const c = getCategoria(catId); return c && c.items.find((x) => x.id === itemId); }
 function guardarCategorias() { if (window._fbSet) window._fbSet("categorias", window._ST.categorias); }
+
+// Firebase no guarda listas vacías (las borra del todo al leerlas), así que cada vez que llegan
+// datos desde la base, rellenamos cualquier "items"/"marcas"/"modelos" que falte con un array vacío.
+function normalizarCategorias(cats) {
+  (cats || []).forEach((cat) => {
+    if (cat.tipo === "simple") {
+      if (!cat.items) cat.items = [];
+    } else {
+      if (!cat.marcas) cat.marcas = [];
+      cat.marcas.forEach((m) => { if (!m.modelos) m.modelos = []; });
+    }
+  });
+  return cats || [];
+}
 function buscarPorCodigo(codigo) {
   const p = window._ST.products.find((x) => x.codigo === codigo);
   if (p) return { tipo: "flat", producto: p };
@@ -296,10 +319,10 @@ window.initApp = function () {
 window._categoriasSeeded = false;
 window.onCategoriasSnapshot = function (d) {
   if (d) {
-    window._ST.categorias = d;
+    window._ST.categorias = normalizarCategorias(d);
   } else if (!window._categoriasSeeded) {
     window._categoriasSeeded = true;
-    window._ST.categorias = buildDefaultCategorias();
+    window._ST.categorias = normalizarCategorias(buildDefaultCategorias());
     guardarCategorias();
     const antes = window._ST.products.length;
     window._ST.products = window._ST.products.filter((p) => !["funda", "módulo pantalla", "modulo pantalla"].includes(String(p.nombre).toLowerCase()));
@@ -330,16 +353,17 @@ window.renderAll = function () {
 function renderVenta() {
   const prods = window._ST.products;
   let tiles = (window._ST.categorias || []).map((cat) => {
-    const cuenta = cat.tipo === "simple" ? cat.items.length : cat.marcas.reduce((a, m) => a + m.modelos.length, 0);
+    const cuenta = cat.tipo === "simple" ? (cat.items || []).length : (cat.marcas || []).reduce((a, m) => a + (m.modelos || []).length, 0);
     const label = cat.tipo === "simple" ? "items" : "modelos";
-    return `<div class="tile" style="background:#2A2D33;color:#FAF8F3;" onclick="abrirCategoria('${cat.id}')">
+    return `<div class="tile tile-categoria" onclick="abrirCategoria('${cat.id}')">
+      <div class="folder3d"><div class="back"></div><div class="front"></div></div>
       <div>
-        <div class="tile-name">📂 ${esc(cat.nombre)}</div>
+        <div class="tile-name">${esc(cat.nombre)}</div>
         <div class="tile-stock">${cuenta} ${label}</div>
       </div>
-      <div class="tile-price mono" style="color:#FF7A30;">Abrir ›</div>
     </div>`;
   }).join("");
+  tiles += `<div class="tile tile-dashed" onclick="abrirAddCategoria()"><div style="font-size:18px">+</div><div style="font-size:10.5px;margin-top:3px">Carpeta</div></div>`;
 
   tiles += prods.map((p, i) => {
     const critico = p.stock <= 2, bajo = p.stock <= 5 && !critico;
@@ -575,6 +599,40 @@ window.abrirEtiqueta = function (id) {
 };
 
 // ───────────────────────────── CATEGORÍAS: MARCAS Y MODELOS ─────────────────────────────
+window.abrirAddCategoria = function () {
+  abrirModal(`
+    <h2>Nueva carpeta</h2>
+    <div class="field"><label class="lbl">Nombre</label><input type="text" id="acNombre" placeholder="Ej: Vidrios templados por modelo"></div>
+    <div class="field">
+      <label class="lbl">¿Cómo se organiza adentro?</label>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+        <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#1F2023;">
+          <input type="radio" name="acTipo" value="marca" checked style="margin-top:3px;width:auto;">
+          <span><strong>Por marca y modelo</strong> — como Fundas o Módulos (marca → modelo → 2 precios)</span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#1F2023;">
+          <input type="radio" name="acTipo" value="simple" style="margin-top:3px;width:auto;">
+          <span><strong>Lista simple</strong> — como Cargadores y USB (vos agregás ítems directo, sin marca)</span>
+        </label>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-orange" onclick="guardarCategoriaNueva()">Crear carpeta</button>
+    </div>`);
+};
+window.guardarCategoriaNueva = function () {
+  const nombre = document.getElementById("acNombre").value.trim();
+  if (!nombre) return;
+  const tipo = document.querySelector('input[name="acTipo"]:checked').value;
+  const id = slug(nombre) + "-" + Date.now();
+  const nueva = tipo === "simple" ? { id, tipo, nombre, items: [] } : { id, tipo, nombre, marcas: [] };
+  window._ST.categorias = [...window._ST.categorias, nueva];
+  guardarCategorias();
+  cerrarModal();
+  window.renderAll();
+};
+
 window.abrirCategoria = function (catId) {
   const cat = getCategoria(catId);
   if (!cat) return;
@@ -601,7 +659,7 @@ window.abrirCategoriaSimple = function (catId) {
     const stockClass = critico ? "critico" : bajo ? "bajo" : "";
     const inner = window._editandoModelos
       ? `<div class="tile-price mono" style="color:#FF7A30;">✎ Editar</div>`
-      : `<div class="tile-price mono">${money(it.precio)}</div>`;
+      : `<div class="tile-price mono">${money(it.precioLista)}</div>`;
     const accion = window._editandoModelos ? `abrirEditarItemSimple('${catId}','${it.id}')` : `abrirConfirmVentaItemSimple('${catId}','${it.id}')`;
     return `<div class="tile" onclick="${accion}">
       <div>
@@ -628,26 +686,17 @@ window.abrirAddItemSimple = function (catId) {
   abrirModal(`
     <h2>Nuevo ítem</h2>
     <div class="field"><label class="lbl">Nombre</label><input type="text" id="aisNombre" placeholder="Ej: Cargador tipo C 20W"></div>
-    <div class="field"><label class="lbl">Costo</label><input type="number" id="aisCosto" placeholder="0" oninput="aisRecalc()"></div>
+    <div class="field"><label class="lbl">Costo</label><input type="number" id="aisCosto" placeholder="0"></div>
     <div class="row2 field">
-      <div><label class="lbl">Margen (%)</label><input type="number" id="aisPct" value="100" oninput="aisRecalc()"></div>
-      <div><label class="lbl">Precio venta</label><input type="number" id="aisPrecio" placeholder="0" oninput="aisRecalcInverso()"></div>
+      <div><label class="lbl">Precio lista</label><input type="number" id="aisLista" placeholder="0"></div>
+      <div><label class="lbl">Precio efectivo</label><input type="number" id="aisEfectivo" placeholder="0"></div>
     </div>
     <div class="field"><label class="lbl">Stock inicial</label><input type="number" id="aisStock" placeholder="0"></div>
+    <div class="hint">Precio lista: cualquier medio de pago. Precio efectivo: efectivo o transferencia.</div>
     <div class="btn-row">
       <button class="btn btn-ghost" onclick="abrirCategoriaSimple('${catId}')">Cancelar</button>
       <button class="btn btn-orange" onclick="guardarItemSimpleNuevo('${catId}')">Guardar</button>
     </div>`);
-};
-window.aisRecalc = function () {
-  const costo = Number(document.getElementById("aisCosto").value) || 0;
-  const pct = Number(document.getElementById("aisPct").value) || 0;
-  if (costo > 0) document.getElementById("aisPrecio").value = Math.round(costo * (1 + pct / 100));
-};
-window.aisRecalcInverso = function () {
-  const costo = Number(document.getElementById("aisCosto").value) || 0;
-  const precio = Number(document.getElementById("aisPrecio").value) || 0;
-  if (costo > 0) document.getElementById("aisPct").value = Math.round(((precio - costo) / costo) * 100);
 };
 window.guardarItemSimpleNuevo = function (catId) {
   const nombre = document.getElementById("aisNombre").value.trim();
@@ -657,7 +706,8 @@ window.guardarItemSimpleNuevo = function (catId) {
   cat.items.push({
     id, nombre,
     costo: Number(document.getElementById("aisCosto").value) || 0,
-    precio: Number(document.getElementById("aisPrecio").value) || 0,
+    precioLista: Number(document.getElementById("aisLista").value) || 0,
+    precioEfectivo: Number(document.getElementById("aisEfectivo").value) || 0,
     stock: Number(document.getElementById("aisStock").value) || 0,
     codigo: "DF" + catId[0].toUpperCase() + id.slice(-6)
   });
@@ -669,19 +719,34 @@ window.abrirConfirmVentaItemSimple = function (catId, itemId) {
   const it = getItemSimple(catId, itemId);
   if (!it) return;
   abrirModal(`
-    <h2>Vender ${esc(it.nombre)}</h2>
-    <div class="hint">Precio predeterminado: ${money(it.precio)}. Editalo si vendiste a otro valor.</div>
+    <h2>${esc(it.nombre)}</h2>
+    <div class="hint">Stock: ${it.stock}. Elegí cómo te pagaron:</div>
+    <div class="btn-row" style="margin-bottom:8px;">
+      <button class="btn btn-orange" style="flex:1;display:flex;flex-direction:column;gap:2px;padding:14px 0;" onclick="registrarVentaItemSimple('${catId}','${itemId}','lista')">
+        <span style="font-size:11px;font-weight:600;">💳 Lista</span><span class="mono" style="font-size:16px;">${money(it.precioLista)}</span>
+      </button>
+      <button class="btn" style="flex:1;background:#2E9C6F;color:#fff;display:flex;flex-direction:column;gap:2px;padding:14px 0;" onclick="registrarVentaItemSimple('${catId}','${itemId}','efectivo')">
+        <span style="font-size:11px;font-weight:600;">💵 Efectivo/Transf.</span><span class="mono" style="font-size:16px;">${money(it.precioEfectivo)}</span>
+      </button>
+    </div>
+    <button class="btn-text-red" style="color:#7A7D85;" onclick="abrirOtroMontoItemSimple('${catId}','${itemId}')">✎ Cobré otro monto</button>
+    <button class="btn btn-ghost" style="width:100%;margin-top:6px;" onclick="cerrarModal()">Cancelar</button>`);
+};
+window.abrirOtroMontoItemSimple = function (catId, itemId) {
+  const it = getItemSimple(catId, itemId);
+  abrirModal(`
+    <h2>${esc(it.nombre)} — otro monto</h2>
     <label class="lbl">Precio de venta</label>
-    <input type="number" id="confirmVentaItemPrecio" class="mono" value="${it.precio}" style="font-size:18px;padding:10px 12px;margin-bottom:14px;">
+    <input type="number" id="otroMontoItem" class="mono" value="${it.precioLista}" style="font-size:18px;padding:10px 12px;margin-bottom:14px;">
     <div class="btn-row">
-      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
-      <button class="btn btn-orange" onclick="registrarVentaItemSimple('${catId}','${itemId}')">Registrar venta</button>
+      <button class="btn btn-ghost" onclick="abrirConfirmVentaItemSimple('${catId}','${itemId}')">Volver</button>
+      <button class="btn btn-orange" onclick="registrarVentaItemSimple('${catId}','${itemId}','otro')">Registrar venta</button>
     </div>`);
 };
-window.registrarVentaItemSimple = function (catId, itemId) {
+window.registrarVentaItemSimple = function (catId, itemId, tipo) {
   const it = getItemSimple(catId, itemId);
   if (!it) return;
-  const precioFinal = Number(document.getElementById("confirmVentaItemPrecio").value) || it.precio;
+  const precioFinal = tipo === "lista" ? it.precioLista : tipo === "efectivo" ? it.precioEfectivo : Number(document.getElementById("otroMontoItem").value) || it.precioLista;
   const ganancia = precioFinal - it.costo;
   window._ST.ventasHoy = [{ id: String(Date.now()), nombre: it.nombre, precio: precioFinal, ganancia, hora: nowHora() }, ...window._ST.ventasHoy];
   it.stock = Math.max(0, it.stock - 1);
@@ -694,14 +759,13 @@ window.registrarVentaItemSimple = function (catId, itemId) {
 window.abrirEditarItemSimple = function (catId, itemId) {
   const it = getItemSimple(catId, itemId);
   if (!it) return;
-  const pct = it.costo > 0 ? Math.round(((it.precio - it.costo) / it.costo) * 100) : 0;
   abrirModal(`
     <h2>Editar ${esc(it.nombre)}</h2>
     <div class="field"><label class="lbl">Nombre</label><input type="text" id="eisNombre" value="${esc(it.nombre)}"></div>
-    <div class="field"><label class="lbl">Costo</label><input type="number" id="eisCosto" value="${it.costo}" oninput="eisRecalc()"></div>
+    <div class="field"><label class="lbl">Costo</label><input type="number" id="eisCosto" value="${it.costo}"></div>
     <div class="row2 field">
-      <div><label class="lbl">Margen (%)</label><input type="number" id="eisPct" value="${pct}" oninput="eisRecalc()"></div>
-      <div><label class="lbl">Precio venta</label><input type="number" id="eisPrecio" value="${it.precio}" oninput="eisRecalcInverso()"></div>
+      <div><label class="lbl">Precio lista</label><input type="number" id="eisLista" value="${it.precioLista}"></div>
+      <div><label class="lbl">Precio efectivo</label><input type="number" id="eisEfectivo" value="${it.precioEfectivo}"></div>
     </div>
     <div class="field"><label class="lbl">Stock</label><input type="number" id="eisStock" value="${it.stock}"></div>
     <div class="btn-row">
@@ -711,22 +775,13 @@ window.abrirEditarItemSimple = function (catId, itemId) {
     <button class="btn-pill" style="width:100%;justify-content:center;margin-top:10px;" onclick="abrirEtiquetaItemSimple('${catId}','${itemId}')">🖨 Imprimir etiqueta</button>
     <button class="btn-text-red" onclick="confirmarBorrarItemSimple('${catId}','${itemId}')">🗑 Eliminar</button>`);
 };
-window.eisRecalc = function () {
-  const costo = Number(document.getElementById("eisCosto").value) || 0;
-  const pct = Number(document.getElementById("eisPct").value) || 0;
-  if (costo > 0) document.getElementById("eisPrecio").value = Math.round(costo * (1 + pct / 100));
-};
-window.eisRecalcInverso = function () {
-  const costo = Number(document.getElementById("eisCosto").value) || 0;
-  const precio = Number(document.getElementById("eisPrecio").value) || 0;
-  if (costo > 0) document.getElementById("eisPct").value = Math.round(((precio - costo) / costo) * 100);
-};
 window.guardarEdicionItemSimple = function (catId, itemId) {
   const it = getItemSimple(catId, itemId);
   if (!it) return;
   it.nombre = document.getElementById("eisNombre").value.trim() || it.nombre;
   it.costo = Number(document.getElementById("eisCosto").value) || 0;
-  it.precio = Number(document.getElementById("eisPrecio").value) || 0;
+  it.precioLista = Number(document.getElementById("eisLista").value) || 0;
+  it.precioEfectivo = Number(document.getElementById("eisEfectivo").value) || 0;
   it.stock = Number(document.getElementById("eisStock").value) || 0;
   guardarCategorias();
   abrirCategoriaSimple(catId);
@@ -760,7 +815,7 @@ window.abrirEtiquetaItemSimple = function (catId, itemId) {
       <div style="font-size:13px;margin-bottom:6px;">${esc(it.nombre)}</div>
       <img src="${barcodeUrl(it.codigo)}" alt="${it.codigo}">
       <div class="mono" style="font-size:11px;margin-top:2px;">${it.codigo}</div>
-      <div class="mono" style="font-weight:700;font-size:15px;margin-top:4px;">${money(it.precio)}</div>
+      <div class="mono" style="font-weight:700;font-size:13px;margin-top:4px;">Lista ${money(it.precioLista)} · Efectivo ${money(it.precioEfectivo)}</div>
     </div>
     <div class="btn-row">
       <button class="btn btn-ghost" onclick="abrirEditarItemSimple('${catId}','${itemId}')">Cerrar</button>
@@ -1001,7 +1056,7 @@ window.moverProductoASimple = function (productId, catId) {
   const p = window._ST.products.find((x) => x.id === productId);
   const cat = getCategoria(catId);
   if (!p || !cat) return;
-  cat.items.push({ id: p.id, nombre: p.nombre, costo: p.costo, precio: p.precio, stock: p.stock, codigo: p.codigo });
+  cat.items.push({ id: p.id, nombre: p.nombre, costo: p.costo, precioLista: p.precio, precioEfectivo: Math.round(p.precio * 0.9), stock: p.stock, codigo: p.codigo });
   window._ST.products = window._ST.products.filter((x) => x.id !== productId);
   guardarProducts();
   guardarCategorias();
@@ -1024,13 +1079,16 @@ window.moverProductoAMarca = function (productId, catId, marcaId) {
 // ───────────────────────────── STOCK ─────────────────────────────
 function renderStock() {
   const catTiles = (window._ST.categorias || []).map((cat) => {
-    const cuenta = cat.tipo === "simple" ? cat.items.length : cat.marcas.reduce((a, m) => a + m.modelos.length, 0);
+    const cuenta = cat.tipo === "simple" ? (cat.items || []).length : (cat.marcas || []).reduce((a, m) => a + (m.modelos || []).length, 0);
     const label = cat.tipo === "simple" ? "items" : "modelos";
-    return `<div class="tile" style="background:#2A2D33;color:#FAF8F3;" onclick="abrirCategoria('${cat.id}')">
-      <div class="tile-name">📂 ${esc(cat.nombre)}</div>
-      <div class="tile-stock">${cuenta} ${label} · ver y editar</div>
+    return `<div class="tile tile-categoria" onclick="abrirCategoria('${cat.id}')">
+      <div class="folder3d"><div class="back"></div><div class="front"></div></div>
+      <div>
+        <div class="tile-name">${esc(cat.nombre)}</div>
+        <div class="tile-stock">${cuenta} ${label}</div>
+      </div>
     </div>`;
-  }).join("");
+  }).join("") + `<div class="tile tile-dashed" onclick="abrirAddCategoria()"><div style="font-size:18px">+</div><div style="font-size:10.5px;margin-top:3px">Carpeta</div></div>`;
 
   const rows = window._ST.products.map((p) => {
     const critico = p.stock <= 2, bajo = p.stock <= 5 && !critico;
