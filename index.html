@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#15171B">
+<title>Displayfix — Inventario</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { margin:0; font-family:'Inter',sans-serif; background:#15171B; color:#FAF8F3; }
+.mono { font-family:'IBM Plex Mono',monospace; }
+.display { font-family:'Space Grotesk',sans-serif; }
+.wrap { max-width:420px; margin:0 auto; padding:18px 16px 50px; }
+.header-title { font-size:22px; font-weight:700; letter-spacing:-0.3px; }
+.header-sub { font-size:12px; color:#9A9DA5; margin-top:2px; }
+.tabs { display:flex; gap:6px; background:#1F2228; padding:4px; border-radius:12px; margin:16px 0; }
+.tab-btn { flex:1; padding:10px 0; text-align:center; font-weight:600; font-size:13px; border-radius:10px; cursor:pointer; background:transparent; color:#9A9DA5; border:none; }
+.tab-btn.active { background:#FF7A30; color:#15171B; }
+.scanner-bar { background:#1F2228; border-radius:12px; padding:10px 12px; margin-bottom:16px; }
+.scanner-top { display:flex; align-items:center; justify-content:space-between; }
+.scan-status { display:flex; align-items:center; gap:6px; font-size:11.5px; color:#5FB88A; font-weight:600; }
+.scanner-actions { display:flex; gap:6px; }
+.btn-pill { display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; background:transparent; color:#9A9DA5; border:1px solid #3A3D44; border-radius:8px; padding:6px 9px; cursor:pointer; }
+.btn-pill.orange { background:#FF7A30; color:#15171B; border:none; font-weight:700; }
+.scan-msg { border-radius:8px; padding:7px 10px; font-size:12px; margin-top:8px; }
+.scan-msg.ok { background:#1F3B30; color:#5FB88A; }
+.scan-msg.err { background:#3B1F1F; color:#E5848A; }
+.scan-test { display:flex; gap:6px; margin-top:8px; }
+.scan-test input { background:#15171B; color:#FAF8F3; border:1px solid #3A3D44; }
+.scan-hint { font-size:10px; color:#6E7178; margin:8px 0 6px; text-transform:uppercase; letter-spacing:0.4px; }
+.grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:18px; }
+.tile { background:#FAF8F3; color:#1F2023; border-radius:12px; padding:10px 9px; min-height:64px; display:flex; flex-direction:column; justify-content:space-between; cursor:pointer; box-shadow:0 1px 0 rgba(0,0,0,0.04); }
+.tile:active { transform:scale(0.97); }
+.tile-dashed { align-items:center; justify-content:center; border:1.5px dashed #555861; background:transparent; color:#9A9DA5; }
+.tile-name { font-weight:600; font-size:12.5px; line-height:1.2; }
+.tile-stock { font-size:10.5px; color:#9A9DA5; margin-top:2px; }
+.tile-stock.bajo { color:#FF7A30; }
+.tile-stock.critico { color:#E5484D; font-weight:700; }
+.tile-price { font-size:14px; font-weight:600; color:#1F2023; margin-top:6px; }
+.move-row { display:flex; justify-content:space-between; margin-top:6px; }
+.move-btn { background:#1F2023; color:#FAF8F3; border:none; border-radius:6px; width:22px; height:22px; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.move-btn:disabled { opacity:0.25; }
+.tape { background:#1F2228; border-radius:14px; overflow:hidden; margin-bottom:10px; }
+.perforate { height:10px; background-image:radial-gradient(circle, #15171B 4px, transparent 4.5px); background-size:16px 10px; background-position:4px 0; }
+.tape-inner { padding:12px 16px; }
+.tape-head { display:flex; align-items:center; gap:6px; margin-bottom:8px; color:#9A9DA5; font-size:11px; text-transform:uppercase; letter-spacing:0.6px; }
+.tape-row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px dashed #3A3D44; font-size:13px; }
+.tape-empty { font-size:12.5px; color:#6E7178; padding:8px 0; }
+.gain { color:#3FB68B; }
+.panel { background:#1F2228; border-radius:14px; padding:14px; }
+.row-head { display:grid; grid-template-columns:1.3fr 0.8fr 0.8fr 0.8fr 0.6fr 24px 24px; gap:4px; font-size:10.5px; color:#9A9DA5; padding:8px 8px 6px; text-transform:uppercase; letter-spacing:0.4px; }
+.row-item { display:grid; grid-template-columns:1.3fr 0.8fr 0.8fr 0.8fr 0.6fr 24px 24px; gap:4px; padding:9px 8px; align-items:center; border-top:1px solid #2A2D33; font-size:13px; }
+.icon-btn { background:none; border:none; color:#9A9DA5; cursor:pointer; padding:0; display:flex; }
+.dashed-btn { width:100%; background:transparent; border:1.5px dashed #555861; color:#9A9DA5; border-radius:10px; padding:9px 0; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; margin-top:10px; }
+.gastos-total { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.gastos-total span:first-child { font-size:11px; color:#9A9DA5; text-transform:uppercase; letter-spacing:0.4px; }
+.gastos-total span:last-child { font-size:17px; font-weight:700; color:#E5484D; }
+.hist-row { display:flex; justify-content:space-between; align-items:center; padding:9px 4px; border-top:1px solid #2A2D33; font-size:13px; }
+.hist-fecha { font-size:10.5px; color:#6E7178; }
+input[type=text], input[type=number] { background:#fff; border:1px solid #D8D4CB; border-radius:8px; padding:8px; color:#1F2023; font-size:14px; width:100%; }
+label.lbl { font-size:10.5px; color:#7A7D85; text-transform:uppercase; display:block; margin-bottom:3px; }
+.field { margin-bottom:10px; }
+.row2 { display:flex; gap:8px; }
+.row2 > div { flex:1; }
+.overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:flex-end; justify-content:center; z-index:40; }
+.sheet { background:#FAF8F3; color:#1F2023; width:100%; max-width:420px; border-radius:18px 18px 0 0; padding:20px; max-height:90vh; overflow-y:auto; }
+.sheet h2 { font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; margin:0 0 4px; }
+.sheet .hint { font-size:12px; color:#7A7D85; margin-bottom:14px; }
+.btn-row { display:flex; gap:10px; margin-top:6px; }
+.btn { flex:1; padding:12px 0; border-radius:10px; border:none; font-weight:700; cursor:pointer; font-size:14px; }
+.btn-ghost { background:none; border:1px solid #D8D4CB; color:#1F2023; font-weight:600; }
+.btn-orange { background:#FF7A30; color:#15171B; }
+.btn-red { background:#E5484D; color:#fff; }
+.btn-text-red { width:100%; padding:10px 0; border:none; background:none; color:#E5484D; font-weight:600; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; margin-top:10px; }
+.label-card { border:1px dashed #C9C5BB; border-radius:10px; padding:14px; text-align:center; margin-bottom:16px; }
+.label-card img { width:100%; max-width:260px; }
+.confirm-delete { background:#FBEAEA; border-radius:10px; padding:14px; }
+.report-box { background:#F0EEE8; border-radius:12px; padding:16px; margin-bottom:16px; }
+.report-line { display:flex; justify-content:space-between; padding:6px 0; font-size:13.5px; }
+.report-line.top { border-top:1px dashed #D8D4CB; }
+.report-line.bold { font-weight:700; font-size:14px; }
+.camera-modal { position:fixed; inset:0; background:#000; display:flex; flex-direction:column; z-index:50; }
+.camera-top { display:flex; justify-content:space-between; align-items:center; padding:14px; }
+.camera-top button { background:rgba(255,255,255,0.15); border:none; border-radius:8px; padding:8px; color:#fff; cursor:pointer; }
+.camera-modal video { flex:1; width:100%; object-fit:cover; }
+.camera-err { background:#3B1F1F; color:#E5848A; font-size:12.5px; padding:14px; margin:14px; border-radius:10px; }
+svg.ic { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vertical-align:-2px; }
+@media print {
+  body * { visibility:hidden; }
+  #etiquetaImprimir, #etiquetaImprimir * { visibility:visible; }
+  #etiquetaImprimir { position:absolute; top:0; left:0; width:100%; }
+}
+.hidden { display:none !important; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div>
+    <div class="header-title display">Displayfix</div>
+    <div class="header-sub">Panel de ventas e inventario</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tabBtnVenta" onclick="setTab('venta')">Venta rápida</button>
+    <button class="tab-btn" id="tabBtnStock" onclick="setTab('stock')">Stock</button>
+    <button class="tab-btn" id="tabBtnGastos" onclick="setTab('gastos')">Gastos</button>
+  </div>
+
+  <div class="scanner-bar">
+    <div class="scanner-top">
+      <div class="scan-status">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M3 12h18"/></svg>
+        Escáner listo
+      </div>
+      <div class="scanner-actions">
+        <button class="btn-pill" onclick="cerrarCajaManual()">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg> Cerrar caja
+        </button>
+        <button class="btn-pill orange" onclick="abrirCamara()">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Escanear
+        </button>
+      </div>
+    </div>
+    <div id="scanMsgBox"></div>
+    <div class="scan-hint">Lector USB/Bluetooth: listo automáticamente. Probar a mano:</div>
+    <div class="scan-test">
+      <input type="text" id="scanTestInput" placeholder="Ej: DF00001" onkeydown="if(event.key==='Enter'){handleScan(this.value);this.value='';}">
+      <button class="btn-pill" style="background:#2A2D33;color:#FAF8F3;" onclick="const i=document.getElementById('scanTestInput');handleScan(i.value);i.value='';">Ir</button>
+    </div>
+  </div>
+
+  <div id="content"></div>
+</div>
+
+<!-- MODALES -->
+<div id="modalRoot"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const FC = {
+  apiKey:"AIzaSyDWqNyzD2SAZVqdq1SHntoMVmOfaJAGTuI",
+  authDomain:"taller-app-75c32.firebaseapp.com",
+  projectId:"taller-app-75c32",
+  storageBucket:"taller-app-75c32.firebasestorage.app",
+  messagingSenderId:"839390196228",
+  appId:"1:839390196228:web:947d28d1362077a86c7b51",
+  databaseURL:"https://taller-app-75c32-default-rtdb.firebaseio.com"
+};
+const fbApp = initializeApp(FC);
+const db = getDatabase(fbApp);
+const ROOT = "inventarioDisplayfix";
+
+window._fbSet = (path, data) => set(ref(db, `${ROOT}/${path}`), data);
+
+onValue(ref(db, `${ROOT}/products`), (snap) => {
+  const d = snap.val();
+  window._ST.products = d ? Object.values(d) : window._ST.defaultProducts;
+  if (window._ready) window.renderAll();
+});
+onValue(ref(db, `${ROOT}/ventasHoy`), (snap) => {
+  const d = snap.val();
+  window._ST.ventasHoy = d ? Object.values(d) : [];
+  if (window._ready) window.renderAll();
+});
+onValue(ref(db, `${ROOT}/gastos`), (snap) => {
+  const d = snap.val();
+  window._ST.gastos = d ? Object.values(d) : [];
+  if (window._ready) window.renderAll();
+});
+onValue(ref(db, `${ROOT}/gastoTiles`), (snap) => {
+  const d = snap.val();
+  window._ST.gastoTiles = d ? Object.values(d) : window._ST.defaultGastoTiles;
+  if (window._ready) window.renderAll();
+});
+onValue(ref(db, `${ROOT}/ultimoCierre`), (snap) => {
+  window._ST.ultimoCierre = snap.val() || null;
+});
+onValue(ref(db, ".info/connected"), (snap) => {
+  window._fbOK = snap.val() === true;
+});
+window._fbReady = true;
+window.initApp();
+</script>
+
+<script>
+// ───────────────────────────── ESTADO ─────────────────────────────
+window._ST = {
+  defaultProducts: [
+    { id:"1", nombre:"Funda", costo:1200, precio:3500, stock:18, codigo:"DF00001" },
+    { id:"2", nombre:"Vidrio templado", costo:800, precio:2500, stock:25, codigo:"DF00002" },
+    { id:"3", nombre:"Batería", costo:9500, precio:22000, stock:6, codigo:"DF00003" },
+    { id:"4", nombre:"Módulo pantalla", costo:45000, precio:78000, stock:3, codigo:"DF00004" },
+    { id:"5", nombre:"Pin de carga", costo:2200, precio:6000, stock:12, codigo:"DF00005" }
+  ],
+  defaultGastoTiles: [
+    { id:"g1", nombre:"Desayuno", monto:11000 },
+    { id:"g2", nombre:"Almuerzo", monto:20000 },
+    { id:"g3", nombre:"Compra de repuestos", monto:0 },
+    { id:"g4", nombre:"Compra de fundas", monto:0 }
+  ],
+  products: [],
+  ventasHoy: [],
+  gastos: [],
+  gastoTiles: [],
+  ultimoCierre: null
+};
+window._ready = false;
+window._fbOK = false;
+window._tab = "venta";
+window._organizando = false;
+window._scanBuffer = "";
+window._scanLastTime = Date.now();
+window._cameraStream = null;
+window._cameraRaf = null;
+
+function money(n) { return "$" + Math.round(Number(n) || 0).toLocaleString("es-AR"); }
+function barcodeUrl(codigo) { return "https://barcodeapi.org/api/128/" + encodeURIComponent(codigo); }
+function hoyStr() { return new Date().toLocaleDateString("es-AR"); }
+function nowHora() { return new Date().toLocaleTimeString("es-AR", { hour:"2-digit", minute:"2-digit" }); }
+function esc(s) { return String(s == null ? "" : s).replace(/"/g, "&quot;"); }
+
+window.initApp = function () {
+  window._ready = true;
+  if (!window._ST.products.length) window._ST.products = window._ST.defaultProducts;
+  if (!window._ST.gastoTiles.length) window._ST.gastoTiles = window._ST.defaultGastoTiles;
+  window.renderAll();
+  iniciarEscucha();
+  setInterval(chequearCierreAutomatico, 30000);
+};
+
+// ───────────────────────────── TABS ─────────────────────────────
+window.setTab = function (t) {
+  window._tab = t;
+  ["venta","stock","gastos"].forEach((x) => {
+    document.getElementById("tabBtn" + x[0].toUpperCase() + x.slice(1)).classList.toggle("active", x === t);
+  });
+  window.renderAll();
+};
+
+window.renderAll = function () {
+  const c = document.getElementById("content");
+  if (window._tab === "venta") c.innerHTML = renderVenta();
+  else if (window._tab === "stock") c.innerHTML = renderStock();
+  else c.innerHTML = renderGastos();
+};
+
+// ───────────────────────────── VENTA RÁPIDA ─────────────────────────────
+function renderVenta() {
+  const prods = window._ST.products;
+  let tiles = prods.map((p, i) => {
+    const critico = p.stock <= 2, bajo = p.stock <= 5 && !critico;
+    const stockClass = critico ? "critico" : bajo ? "bajo" : "";
+    const inner = window._organizando
+      ? `<div class="move-row">
+           <button class="move-btn" ${i === 0 ? "disabled" : ""} onclick="event.stopPropagation();moverProducto(${i},-1)">←</button>
+           <button class="move-btn" ${i === prods.length - 1 ? "disabled" : ""} onclick="event.stopPropagation();moverProducto(${i},1)">→</button>
+         </div>`
+      : `<div class="tile-price mono">${money(p.precio)}</div>`;
+    return `<div class="tile" onclick="${window._organizando ? "" : `abrirConfirmVenta('${p.id}')`}">
+      <div>
+        <div class="tile-name">${esc(p.nombre)}</div>
+        <div class="tile-stock ${stockClass}">Stock: ${p.stock}</div>
+      </div>
+      ${inner}
+    </div>`;
+  }).join("");
+  tiles += `<div class="tile tile-dashed" onclick="abrirAddProducto()"><div style="font-size:18px">+</div><div style="font-size:10.5px;margin-top:3px">Agregar</div></div>`;
+
+  const ticketRows = window._ST.ventasHoy.length
+    ? window._ST.ventasHoy.slice().reverse().map((t) =>
+        `<div class="tape-row"><span>${t.hora} · ${esc(t.nombre)}</span><span class="mono">${money(t.precio)} <span class="gain">(+${money(t.ganancia)})</span></span></div>`
+      ).join("")
+    : `<div class="tape-empty">Tocá un producto arriba para registrar la primera venta.</div>`;
+
+  return `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+      <button class="btn-pill ${window._organizando ? "orange" : ""}" onclick="toggleOrganizar()">↕ ${window._organizando ? "Listo" : "Organizar"}</button>
+    </div>
+    <div class="grid3">${tiles}</div>
+    <div class="tape">
+      <div class="perforate"></div>
+      <div class="tape-inner">
+        <div class="tape-head">🎫 Ventas de hoy</div>
+        ${ticketRows}
+      </div>
+      <div class="perforate"></div>
+    </div>`;
+}
+
+window.toggleOrganizar = function () { window._organizando = !window._organizando; window.renderAll(); };
+
+window.moverProducto = function (i, dir) {
+  const dest = i + dir;
+  if (dest < 0 || dest >= window._ST.products.length) return;
+  const arr = window._ST.products.slice();
+  [arr[i], arr[dest]] = [arr[dest], arr[i]];
+  window._ST.products = arr;
+  guardarProducts();
+  window.renderAll();
+};
+
+function guardarProducts() {
+  const obj = {}; window._ST.products.forEach((p) => obj[p.id] = p);
+  if (window._fbSet) window._fbSet("products", obj);
+}
+function guardarVentasHoy() {
+  const obj = {}; window._ST.ventasHoy.forEach((v) => obj[v.id] = v);
+  if (window._fbSet) window._fbSet("ventasHoy", obj);
+}
+function guardarGastos() {
+  const obj = {}; window._ST.gastos.forEach((g) => obj[g.id] = g);
+  if (window._fbSet) window._fbSet("gastos", obj);
+}
+function guardarGastoTiles() {
+  const obj = {}; window._ST.gastoTiles.forEach((t) => obj[t.id] = t);
+  if (window._fbSet) window._fbSet("gastoTiles", obj);
+}
+
+// ───────────────────────────── CONFIRMAR VENTA ─────────────────────────────
+window.abrirConfirmVenta = function (id) {
+  const p = window._ST.products.find((x) => x.id === id);
+  if (!p) return;
+  abrirModal(`
+    <h2>Vender ${esc(p.nombre)}</h2>
+    <div class="hint">Precio predeterminado: ${money(p.precio)}. Editalo si vendiste a otro valor.</div>
+    <label class="lbl">Precio de venta</label>
+    <input type="number" id="confirmVentaPrecio" class="mono" value="${p.precio}" style="font-size:18px;padding:10px 12px;margin-bottom:14px;">
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-orange" onclick="registrarVenta('${id}')">Registrar venta</button>
+    </div>`);
+};
+
+window.registrarVenta = function (id) {
+  const p = window._ST.products.find((x) => x.id === id);
+  if (!p) return;
+  const precioFinal = Number(document.getElementById("confirmVentaPrecio").value) || p.precio;
+  const ganancia = precioFinal - p.costo;
+  window._ST.ventasHoy = [{ id: String(Date.now()), nombre: p.nombre, precio: precioFinal, ganancia, hora: nowHora() }, ...window._ST.ventasHoy];
+  p.stock = Math.max(0, p.stock - 1);
+  guardarVentasHoy();
+  guardarProducts();
+  cerrarModal();
+  window.renderAll();
+};
+
+// ───────────────────────────── AGREGAR / EDITAR PRODUCTO ─────────────────────────────
+window.abrirAddProducto = function () {
+  abrirModal(`
+    <h2>Nuevo producto</h2>
+    <div class="field"><label class="lbl">Nombre</label><input type="text" id="npNombre" placeholder="Ej: Cable USB-C"></div>
+    <div class="field"><label class="lbl">Costo</label><input type="number" id="npCosto" placeholder="0" oninput="npRecalcDesdeCosto()"></div>
+    <div class="row2 field">
+      <div><label class="lbl">Margen (%)</label><input type="number" id="npPct" value="100" oninput="npRecalcDesdePct()"></div>
+      <div><label class="lbl">Precio venta</label><input type="number" id="npPrecio" placeholder="0" oninput="npRecalcDesdePrecio()"></div>
+    </div>
+    <div class="field"><label class="lbl">Stock inicial</label><input type="number" id="npStock" placeholder="0"></div>
+    <div class="hint">100% de margen es lo sugerido para accesorios (cargás el doble del costo). Tocando el % o el precio se recalculan entre sí.</div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-orange" onclick="guardarNuevoProducto()">Guardar</button>
+    </div>`);
+};
+window.npRecalcDesdeCosto = function () {
+  const costo = Number(document.getElementById("npCosto").value) || 0;
+  const pct = Number(document.getElementById("npPct").value) || 0;
+  if (costo > 0) document.getElementById("npPrecio").value = Math.round(costo * (1 + pct / 100));
+};
+window.npRecalcDesdePct = function () {
+  const costo = Number(document.getElementById("npCosto").value) || 0;
+  const pct = Number(document.getElementById("npPct").value) || 0;
+  if (costo > 0) document.getElementById("npPrecio").value = Math.round(costo * (1 + pct / 100));
+};
+window.npRecalcDesdePrecio = function () {
+  const costo = Number(document.getElementById("npCosto").value) || 0;
+  const precio = Number(document.getElementById("npPrecio").value) || 0;
+  if (costo > 0) document.getElementById("npPct").value = Math.round(((precio - costo) / costo) * 100);
+};
+
+window.guardarNuevoProducto = function () {
+  const nombre = document.getElementById("npNombre").value.trim();
+  if (!nombre) return;
+  const id = String(Date.now());
+  const nuevo = {
+    id, nombre,
+    costo: Number(document.getElementById("npCosto").value) || 0,
+    precio: Number(document.getElementById("npPrecio").value) || 0,
+    stock: Number(document.getElementById("npStock").value) || 0,
+    codigo: "DF" + id.slice(-6)
+  };
+  window._ST.products = [...window._ST.products, nuevo];
+  guardarProducts();
+  cerrarModal();
+  window.renderAll();
+  abrirEtiqueta(nuevo.id);
+};
+
+window.abrirEditarProducto = function (id) {
+  const p = window._ST.products.find((x) => x.id === id);
+  if (!p) return;
+  const pct = p.costo > 0 ? Math.round(((p.precio - p.costo) / p.costo) * 100) : 0;
+  abrirModal(`
+    <h2>Editar producto</h2>
+    <div class="field"><label class="lbl">Nombre</label><input type="text" id="epNombre" value="${esc(p.nombre)}"></div>
+    <div class="field"><label class="lbl">Costo</label><input type="number" id="epCosto" value="${p.costo}" oninput="epRecalcDesdeCosto()"></div>
+    <div class="row2 field">
+      <div><label class="lbl">Margen (%)</label><input type="number" id="epPct" value="${pct}" oninput="epRecalcDesdePct()"></div>
+      <div><label class="lbl">Precio venta</label><input type="number" id="epPrecio" value="${p.precio}" oninput="epRecalcDesdePrecio()"></div>
+    </div>
+    <div class="field"><label class="lbl">Stock</label><input type="number" id="epStock" value="${p.stock}"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-orange" onclick="guardarEdicionProducto('${id}')">Guardar cambios</button>
+    </div>
+    <button class="btn-text-red" onclick="confirmarBorrarProducto('${id}')">🗑 Eliminar producto</button>`);
+};
+window.epRecalcDesdeCosto = function () {
+  const costo = Number(document.getElementById("epCosto").value) || 0;
+  const pct = Number(document.getElementById("epPct").value) || 0;
+  if (costo > 0) document.getElementById("epPrecio").value = Math.round(costo * (1 + pct / 100));
+};
+window.epRecalcDesdePct = function () {
+  const costo = Number(document.getElementById("epCosto").value) || 0;
+  const pct = Number(document.getElementById("epPct").value) || 0;
+  if (costo > 0) document.getElementById("epPrecio").value = Math.round(costo * (1 + pct / 100));
+};
+window.epRecalcDesdePrecio = function () {
+  const costo = Number(document.getElementById("epCosto").value) || 0;
+  const precio = Number(document.getElementById("epPrecio").value) || 0;
+  if (costo > 0) document.getElementById("epPct").value = Math.round(((precio - costo) / costo) * 100);
+};
+window.guardarEdicionProducto = function (id) {
+  const p = window._ST.products.find((x) => x.id === id);
+  if (!p) return;
+  p.nombre = document.getElementById("epNombre").value.trim() || p.nombre;
+  p.costo = Number(document.getElementById("epCosto").value) || 0;
+  p.precio = Number(document.getElementById("epPrecio").value) || 0;
+  p.stock = Number(document.getElementById("epStock").value) || 0;
+  guardarProducts();
+  cerrarModal();
+  window.renderAll();
+};
+window.confirmarBorrarProducto = function (id) {
+  const p = window._ST.products.find((x) => x.id === id);
+  abrirModal(`
+    <h2>Editar producto</h2>
+    <div class="confirm-delete">
+      <div style="font-size:13px;margin-bottom:10px;">¿Eliminar <strong>${esc(p.nombre)}</strong> del inventario? No se puede deshacer.</div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="abrirEditarProducto('${id}')">No, volver</button>
+        <button class="btn btn-red" onclick="borrarProducto('${id}')">Sí, eliminar</button>
+      </div>
+    </div>`);
+};
+window.borrarProducto = function (id) {
+  window._ST.products = window._ST.products.filter((p) => p.id !== id);
+  guardarProducts();
+  cerrarModal();
+  window.renderAll();
+};
+
+// ───────────────────────────── ETIQUETA / CÓDIGO DE BARRA ─────────────────────────────
+window.abrirEtiqueta = function (id) {
+  const p = window._ST.products.find((x) => x.id === id);
+  if (!p) return;
+  abrirModal(`
+    <h2>Etiqueta de ${esc(p.nombre)}</h2>
+    <div class="hint">Imprimila y pegala en el producto. Al escanearla, se va a registrar la venta solo.</div>
+    <div class="label-card" id="etiquetaImprimir">
+      <div style="font-weight:700;font-size:14px;">Displayfix</div>
+      <div style="font-size:13px;margin-bottom:6px;">${esc(p.nombre)}</div>
+      <img src="${barcodeUrl(p.codigo)}" alt="${p.codigo}">
+      <div class="mono" style="font-size:11px;margin-top:2px;">${p.codigo}</div>
+      <div class="mono" style="font-weight:700;font-size:15px;margin-top:4px;">${money(p.precio)}</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cerrar</button>
+      <button class="btn btn-orange" onclick="window.print()">🖨 Imprimir etiqueta</button>
+    </div>`);
+};
+
+// ───────────────────────────── STOCK ─────────────────────────────
+function renderStock() {
+  const rows = window._ST.products.map((p) => {
+    const critico = p.stock <= 2, bajo = p.stock <= 5 && !critico;
+    const stockColor = critico ? "#E5484D" : bajo ? "#FF7A30" : "#FAF8F3";
+    return `<div class="row-item">
+      <span style="font-weight:500;">${esc(p.nombre)}</span>
+      <span class="mono" style="color:#9A9DA5;">${money(p.costo)}</span>
+      <span class="mono">${money(p.precio)}</span>
+      <span class="mono gain">${money(p.precio - p.costo)}</span>
+      <span class="mono" style="font-weight:${critico ? 700 : 400};color:${stockColor};">${p.stock}</span>
+      <button class="icon-btn" onclick="abrirEtiqueta('${p.id}')">🖨</button>
+      <button class="icon-btn" onclick="abrirEditarProducto('${p.id}')">✎</button>
+    </div>`;
+  }).join("");
+  return `<div class="panel" style="padding:6px;">
+    <div class="row-head"><span>Producto</span><span>Costo</span><span>Precio</span><span>Ganancia</span><span>Stock</span><span></span><span></span></div>
+    ${rows}
+    <div style="padding:8px;"><button class="dashed-btn" style="margin-top:0;" onclick="abrirAddProducto()">+ Agregar producto</button></div>
+  </div>`;
+}
+
+// ───────────────────────────── GASTOS ─────────────────────────────
+function renderGastos() {
+  const totalGastado = window._ST.gastos.reduce((a, g) => a + g.monto, 0);
+  let tiles = window._ST.gastoTiles.map((t) =>
+    `<div class="tile" onclick="abrirConfirmGasto('${t.id}')">
+      <div class="tile-name">${esc(t.nombre)}</div>
+      <div class="tile-price mono">${t.monto ? money(t.monto) : "Tocar"}</div>
+    </div>`
+  ).join("");
+  tiles += `<div class="tile tile-dashed" onclick="abrirAddGastoTile()"><div style="font-size:18px">+</div><div style="font-size:10.5px;margin-top:3px">Agregar</div></div>`;
+
+  const hist = window._ST.gastos.length
+    ? window._ST.gastos.map((g) =>
+        `<div class="hist-row">
+          <div><div style="font-weight:500;">${esc(g.concepto)}</div><div class="hist-fecha">${g.fecha}</div></div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="mono">${money(g.monto)}</span>
+            <button class="icon-btn" onclick="borrarGasto('${g.id}')">🗑</button>
+          </div>
+        </div>`
+      ).join("")
+    : `<div class="tape-empty">Todavía no cargaste ningún gasto. Tocá uno de los mosaicos de arriba.</div>`;
+
+  return `<div class="panel">
+    <div class="gastos-total"><span>Total gastado</span><span class="mono">${money(totalGastado)}</span></div>
+    <div class="grid3" style="margin-bottom:16px;">${tiles}</div>
+    <div class="scan-hint" style="margin:0 0 4px;">Historial</div>
+    ${hist}
+    <button class="dashed-btn" onclick="abrirAddGastoPuntual()">+ Gasto puntual (sin guardar mosaico)</button>
+  </div>`;
+}
+
+window.abrirConfirmGasto = function (id) {
+  const t = window._ST.gastoTiles.find((x) => x.id === id);
+  if (!t) return;
+  abrirModal(`
+    <h2>${esc(t.nombre)}</h2>
+    <div class="hint">Editá el monto si hoy gastaste distinto. Se va a guardar como el nuevo valor por defecto.</div>
+    <label class="lbl">Monto</label>
+    <input type="number" id="confirmGastoMonto" class="mono" value="${t.monto || ""}" style="font-size:18px;padding:10px 12px;margin-bottom:14px;">
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-orange" onclick="registrarGastoTile('${id}')">Registrar gasto</button>
+    </div>`);
+};
+window.registrarGastoTile = function (id) {
+  const t = window._ST.gastoTiles.find((x) => x.id === id);
+  const monto = Number(document.getElementById("confirmGastoMonto").value) || 0;
+  if (!monto) return;
+  window._ST.gastos = [{ id: String(Date.now()), concepto: t.nombre, monto, fecha: hoyStr() }, ...window._ST.gastos];
+  t.monto = monto;
+  guardarGastos();
+  guardarGastoTiles();
+  cerrarModal();
+  window.renderAll();
+};
+
+window.abrirAddGastoTile = function () {
+  abrirModal(`
+    <h2>Nuevo mosaico de gasto</h2>
+    <div class="field"><label class="lbl">Nombre</label><input type="text" id="ngtNombre" placeholder="Ej: Nafta, Internet..."></div>
+    <div class="field"><label class="lbl">Monto habitual (opcional)</label><input type="number" id="ngtMonto" placeholder="0"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-orange" onclick="guardarGastoTileNuevo()">Guardar mosaico</button>
+    </div>`);
+};
+window.guardarGastoTileNuevo = function () {
+  const nombre = document.getElementById("ngtNombre").value.trim();
+  if (!nombre) return;
+  window._ST.gastoTiles = [...window._ST.gastoTiles, { id: String(Date.now()), nombre, monto: Number(document.getElementById("ngtMonto").value) || 0 }];
+  guardarGastoTiles();
+  cerrarModal();
+  window.renderAll();
+};
+
+window.abrirAddGastoPuntual = function () {
+  abrirModal(`
+    <h2>Nuevo gasto</h2>
+    <div class="field"><label class="lbl">Concepto</label><input type="text" id="gpConcepto" placeholder="Ej: Reparación de moto..."></div>
+    <div class="field"><label class="lbl">Monto</label><input type="number" id="gpMonto" placeholder="0"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-orange" onclick="guardarGastoPuntual()">Guardar</button>
+    </div>`);
+};
+window.guardarGastoPuntual = function () {
+  const concepto = document.getElementById("gpConcepto").value.trim();
+  const monto = Number(document.getElementById("gpMonto").value) || 0;
+  if (!concepto || !monto) return;
+  window._ST.gastos = [{ id: String(Date.now()), concepto, monto, fecha: hoyStr() }, ...window._ST.gastos];
+  guardarGastos();
+  cerrarModal();
+  window.renderAll();
+};
+window.borrarGasto = function (id) {
+  window._ST.gastos = window._ST.gastos.filter((g) => g.id !== id);
+  guardarGastos();
+  window.renderAll();
+};
+
+// ───────────────────────────── ESCÁNER (lector USB/Bluetooth tipo teclado) ─────────────────────────────
+function iniciarEscucha() {
+  window.addEventListener("keydown", (e) => {
+    if (document.getElementById("modalRoot").innerHTML.trim() !== "") return; // no interferir con formularios abiertos
+    if (document.activeElement === document.getElementById("scanTestInput")) return;
+    const now = Date.now();
+    if (now - window._scanLastTime > 300) window._scanBuffer = "";
+    window._scanLastTime = now;
+    if (e.key === "Enter") {
+      if (window._scanBuffer.length >= 3) window.handleScan(window._scanBuffer);
+      window._scanBuffer = "";
+    } else if (e.key.length === 1) {
+      window._scanBuffer += e.key;
+    }
+  });
+}
+
+window.handleScan = function (codigo) {
+  const limpio = (codigo || "").trim();
+  if (!limpio) return;
+  const p = window._ST.products.find((x) => x.codigo === limpio);
+  const box = document.getElementById("scanMsgBox");
+  if (p) {
+    window.setTab("venta");
+    window.abrirConfirmVenta(p.id);
+    box.innerHTML = `<div class="scan-msg ok">✓ Escaneado: ${esc(p.nombre)}</div>`;
+  } else {
+    box.innerHTML = `<div class="scan-msg err">Código no reconocido: ${esc(limpio)}</div>`;
+  }
+  setTimeout(() => { box.innerHTML = ""; }, 3000);
+};
+
+// ───────────────────────────── CÁMARA (celular) ─────────────────────────────
+window.abrirCamara = async function () {
+  document.getElementById("modalRoot").innerHTML = `
+    <div class="camera-modal" id="cameraModal">
+      <div class="camera-top"><span style="font-weight:600;">Apuntá al código de barra</span><button onclick="cerrarCamara()">✕</button></div>
+      <video id="cameraVideo" muted playsinline autoplay></video>
+      <div id="cameraErrBox"></div>
+    </div>`;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    window._cameraStream = stream;
+    const video = document.getElementById("cameraVideo");
+    video.srcObject = stream;
+    await video.play();
+    if (!("BarcodeDetector" in window)) {
+      document.getElementById("cameraErrBox").innerHTML = `<div class="camera-err">Este navegador no tiene lector de códigos incorporado (funciona en Chrome para Android). Probá con el escáner a mano mientras tanto.</div>`;
+      return;
+    }
+    const detector = new window.BarcodeDetector({ formats: ["code_128", "ean_13", "qr_code"] });
+    const loop = async () => {
+      if (!document.getElementById("cameraVideo")) return;
+      try {
+        const codes = await detector.detect(video);
+        if (codes.length > 0) {
+          const val = codes[0].rawValue;
+          window.cerrarCamara();
+          window.handleScan(val);
+          return;
+        }
+      } catch (err) {}
+      window._cameraRaf = requestAnimationFrame(loop);
+    };
+    loop();
+  } catch (err) {
+    document.getElementById("cameraErrBox").innerHTML = `<div class="camera-err">No se pudo acceder a la cámara. Revisá que le hayas dado permiso de cámara a esta página en el navegador del celular.</div>`;
+  }
+};
+window.cerrarCamara = function () {
+  if (window._cameraRaf) cancelAnimationFrame(window._cameraRaf);
+  if (window._cameraStream) window._cameraStream.getTracks().forEach((t) => t.stop());
+  window._cameraStream = null;
+  document.getElementById("modalRoot").innerHTML = "";
+};
+
+// ───────────────────────────── CIERRE DE CAJA ─────────────────────────────
+function calcularCierre() {
+  const totalVentas = window._ST.ventasHoy.reduce((a, t) => a + t.precio, 0);
+  const totalGanancia = window._ST.ventasHoy.reduce((a, t) => a + t.ganancia, 0);
+  const hoy = hoyStr();
+  const gastosHoy = window._ST.gastos.filter((g) => g.fecha === hoy).reduce((a, g) => a + g.monto, 0);
+  return { fecha: hoy, cantidad: window._ST.ventasHoy.length, totalVentas, totalGanancia, gastosHoy, gananciaNeta: totalGanancia - gastosHoy };
+}
+window.cerrarCajaManual = function () { mostrarCierre(calcularCierre(), false); }
+function chequearCierreAutomatico() {
+  const ahora = new Date();
+  const hoy = ahora.toLocaleDateString("es-AR");
+  if (ahora.getHours() === 17 && ahora.getMinutes() === 15 && window._ST.ultimoCierre !== hoy) {
+    mostrarCierre(calcularCierre(), true);
+  }
+}
+function mostrarCierre(info, automatico) {
+  window._fbSet && window._fbSet("ultimoCierre", info.fecha);
+  window._ST.ultimoCierre = info.fecha;
+  abrirModal(`
+    <h2>${automatico ? "Cierre automático — 17:15" : "Cierre de caja"}</h2>
+    <div class="hint" style="margin-bottom:16px;">${info.fecha}</div>
+    <div class="report-box">
+      <div class="report-line"><span>Ventas registradas</span><span class="mono" style="font-weight:600;">${info.cantidad}</span></div>
+      <div class="report-line top"><span>Total vendido</span><span class="mono" style="font-weight:600;">${money(info.totalVentas)}</span></div>
+      <div class="report-line top bold"><span>Ganancia bruta</span><span class="mono" style="color:#2E9C6F;">${money(info.totalGanancia)}</span></div>
+      <div class="report-line top"><span>Gastos de hoy</span><span class="mono" style="color:#E5484D;">− ${money(info.gastosHoy)}</span></div>
+      <div class="report-line top bold" style="border-top:1px solid #D8D4CB;"><span>Ganancia neta</span><span class="mono">${money(info.gananciaNeta)}</span></div>
+    </div>
+    <div class="hint">${automatico ? "Se cerró solo porque son las 17:15. La cinta de ventas de hoy se vació para arrancar el día siguiente." : "Cierre manual: la cinta de ventas de hoy se vació. El stock no se toca."}</div>
+    <button class="btn btn-orange" style="width:100%;margin-top:10px;" onclick="aceptarCierre()">Aceptar</button>`);
+  window._ST.ventasHoy = [];
+  guardarVentasHoy();
+}
+window.aceptarCierre = function () { cerrarModal(); window.renderAll(); };
+
+// ───────────────────────────── MODALES GENÉRICOS ─────────────────────────────
+function abrirModal(html) {
+  document.getElementById("modalRoot").innerHTML = `<div class="overlay" onclick="cerrarModal()"><div class="sheet" onclick="event.stopPropagation()">${html}</div></div>`;
+}
+window.cerrarModal = function () { document.getElementById("modalRoot").innerHTML = ""; };
+</script>
+</body>
+</html>
