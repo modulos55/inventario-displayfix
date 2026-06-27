@@ -20,9 +20,9 @@ body { margin:0; font-family:'Inter',sans-serif; background:#15171B; color:#FAF8
 .tab-btn { flex:1; padding:10px 0; text-align:center; font-weight:600; font-size:13px; border-radius:10px; cursor:pointer; background:transparent; color:#9A9DA5; border:none; }
 .tab-btn.active { background:#FF7A30; color:#15171B; }
 .scanner-bar { background:#1F2228; border-radius:12px; padding:10px 12px; margin-bottom:16px; }
-.scanner-top { display:flex; align-items:center; justify-content:space-between; }
+.scanner-top { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; }
 .scan-status { display:flex; align-items:center; gap:6px; font-size:11.5px; color:#5FB88A; font-weight:600; }
-.scanner-actions { display:flex; gap:6px; }
+.scanner-actions { display:flex; gap:6px; flex-wrap:wrap; }
 .btn-pill { display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; background:transparent; color:#9A9DA5; border:1px solid #3A3D44; border-radius:8px; padding:6px 9px; cursor:pointer; }
 .btn-pill.orange { background:#FF7A30; color:#15171B; border:none; font-weight:700; }
 .scan-msg { border-radius:8px; padding:7px 10px; font-size:12px; margin-top:8px; }
@@ -129,6 +129,7 @@ svg.ic { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2
         <button class="btn-pill" onclick="cerrarCajaManual()">
           <svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg> Cerrar caja
         </button>
+        <button class="btn-pill" onclick="abrirHistorialCierres()">📜 Historial</button>
         <button class="btn-pill orange" onclick="abrirCamara()">
           <svg class="ic" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Escanear
         </button>
@@ -193,6 +194,11 @@ onValue(ref(db, `${ROOT}/categorias`), (snap) => {
 onValue(ref(db, `${ROOT}/ultimoCierre`), (snap) => {
   window._ST.ultimoCierre = snap.val() || null;
 });
+onValue(ref(db, `${ROOT}/historialCierres`), (snap) => {
+  const d = snap.val();
+  window._ST.historialCierres = d ? Object.values(d) : [];
+  if (window._ready) window.renderAll();
+});
 onValue(ref(db, ".info/connected"), (snap) => {
   window._fbOK = snap.val() === true;
 });
@@ -221,6 +227,7 @@ window._ST = {
   gastos: [],
   gastoTiles: [],
   categorias: [],
+  historialCierres: [],
   ultimoCierre: null
 };
 window._ready = false;
@@ -318,6 +325,8 @@ window.initApp = function () {
   window.renderAll();
   iniciarEscucha();
   setInterval(chequearCierreAutomatico, 30000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") chequearCierreAutomatico(); });
+  window.addEventListener("focus", chequearCierreAutomatico);
 };
 
 // Se llama desde el listener de Firebase de "categorias" (ver script module). Solo siembra
@@ -444,6 +453,10 @@ function guardarGastos() {
 function guardarGastoTiles() {
   const obj = {}; window._ST.gastoTiles.forEach((t) => obj[t.id] = t);
   if (window._fbSet) window._fbSet("gastoTiles", obj);
+}
+function guardarHistorialCierres() {
+  const obj = {}; window._ST.historialCierres.forEach((h) => obj[h.id] = h);
+  if (window._fbSet) window._fbSet("historialCierres", obj);
 }
 
 // ───────────────────────────── CONFIRMAR VENTA ─────────────────────────────
@@ -1146,7 +1159,9 @@ function renderStock() {
 
 // ───────────────────────────── GASTOS ─────────────────────────────
 function renderGastos() {
+  const hoy = hoyStr();
   const totalGastado = window._ST.gastos.reduce((a, g) => a + g.monto, 0);
+  const viejos = window._ST.gastos.filter((g) => g.fecha !== hoy);
   let tiles = window._ST.gastoTiles.map((t) =>
     `<div class="tile" onclick="abrirConfirmGasto('${t.id}')">
       <div class="tile-name">${esc(t.nombre)}</div>
@@ -1167,14 +1182,43 @@ function renderGastos() {
       ).join("")
     : `<div class="tape-empty">Todavía no cargaste ningún gasto. Tocá uno de los mosaicos de arriba.</div>`;
 
+  const avisoViejos = viejos.length
+    ? `<div style="background:#3B2F1F;color:#E5B864;border-radius:8px;padding:8px 10px;font-size:11.5px;margin-bottom:10px;">
+        Tenés ${viejos.length} gasto(s) de días anteriores que quedaron sin limpiar (de antes de tener el cierre automático).
+        <button onclick="confirmarLimpiarGastosViejos()" style="background:none;border:none;color:#FF7A30;font-weight:700;text-decoration:underline;cursor:pointer;padding:0;font-size:11.5px;">Limpiar ahora</button>
+      </div>`
+    : "";
+
   return `<div class="panel">
     <div class="gastos-total"><span>Total gastado</span><span class="mono">${money(totalGastado)}</span></div>
+    ${avisoViejos}
     <div class="grid3" style="margin-bottom:16px;">${tiles}</div>
     <div class="scan-hint" style="margin:0 0 4px;">Historial</div>
     ${hist}
     <button class="dashed-btn" onclick="abrirAddGastoPuntual()">+ Gasto puntual (sin guardar mosaico)</button>
   </div>`;
 }
+
+window.confirmarLimpiarGastosViejos = function () {
+  const hoy = hoyStr();
+  const viejos = window._ST.gastos.filter((g) => g.fecha !== hoy);
+  abrirModal(`
+    <h2>Limpiar gastos viejos</h2>
+    <div class="confirm-delete">
+      <div style="font-size:13px;margin-bottom:10px;">Se van a borrar ${viejos.length} gasto(s) de días anteriores (ya quedaron contados en cierres pasados o nunca se cerraron). El total de hoy no se toca. No se puede deshacer.</div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="cerrarModal()">No, volver</button>
+        <button class="btn btn-red" onclick="limpiarGastosViejos()">Sí, limpiar</button>
+      </div>
+    </div>`);
+};
+window.limpiarGastosViejos = function () {
+  const hoy = hoyStr();
+  window._ST.gastos = window._ST.gastos.filter((g) => g.fecha === hoy);
+  guardarGastos();
+  cerrarModal();
+  window.renderAll();
+};
 
 window.abrirConfirmGasto = function (id) {
   const t = window._ST.gastoTiles.find((x) => x.id === id);
@@ -1336,7 +1380,8 @@ function calcularCierre() {
   const totalVentas = window._ST.ventasHoy.reduce((a, t) => a + t.precio, 0);
   const totalGanancia = window._ST.ventasHoy.reduce((a, t) => a + t.ganancia, 0);
   const hoy = hoyStr();
-  const gastosHoy = window._ST.gastos.filter((g) => g.fecha === hoy).reduce((a, g) => a + g.monto, 0);
+  const gastosHoyEntries = window._ST.gastos.filter((g) => g.fecha === hoy);
+  const gastosHoy = gastosHoyEntries.reduce((a, g) => a + g.monto, 0);
   const porMedio = { tarjeta: 0, efectivo: 0, transferencia: 0, sinEspecificar: 0 };
   window._ST.ventasHoy.forEach((t) => {
     if (t.medioPago === "tarjeta") porMedio.tarjeta += t.precio;
@@ -1344,14 +1389,19 @@ function calcularCierre() {
     else if (t.medioPago === "transferencia") porMedio.transferencia += t.precio;
     else porMedio.sinEspecificar += t.precio;
   });
-  return { fecha: hoy, cantidad: window._ST.ventasHoy.length, totalVentas, totalGanancia, gastosHoy, gananciaNeta: totalGanancia - gastosHoy, porMedio };
+  return { fecha: hoy, cantidad: window._ST.ventasHoy.length, totalVentas, totalGanancia, gastosHoy, gastosHoyEntries, gananciaNeta: totalGanancia - gastosHoy, porMedio };
 }
 window.cerrarCajaManual = function () { mostrarCierre(calcularCierre(), false); }
 function chequearCierreAutomatico() {
   const ahora = new Date();
   const hoy = ahora.toLocaleDateString("es-AR");
-  if (ahora.getHours() === 17 && ahora.getMinutes() === 15 && window._ST.ultimoCierre !== hoy) {
+  const yaPasoLaHora = ahora.getHours() > 17 || (ahora.getHours() === 17 && ahora.getMinutes() >= 30);
+  if (yaPasoLaHora && window._ST.ultimoCierre !== hoy && window._ST.ventasHoy.length > 0 && !document.getElementById("modalRoot").innerHTML.trim()) {
     mostrarCierre(calcularCierre(), true);
+  } else if (yaPasoLaHora && window._ST.ultimoCierre !== hoy && window._ST.ventasHoy.length === 0) {
+    // No hubo ventas hoy: igual marcamos el día como cerrado para no repetir el chequeo en vano.
+    window._ST.ultimoCierre = hoy;
+    if (window._fbSet) window._fbSet("ultimoCierre", hoy);
   }
 }
 function mostrarCierre(info, automatico) {
@@ -1361,7 +1411,7 @@ function mostrarCierre(info, automatico) {
     ? `<div class="report-line"><span>— Sin especificar</span><span class="mono">${money(info.porMedio.sinEspecificar)}</span></div>`
     : "";
   abrirModal(`
-    <h2>${automatico ? "Cierre automático — 17:15" : "Cierre de caja"}</h2>
+    <h2>${automatico ? "Cierre automático — 17:30" : "Cierre de caja"}</h2>
     <div class="hint" style="margin-bottom:16px;">${info.fecha}</div>
     <div class="report-box">
       <div class="report-line"><span>Ventas registradas</span><span class="mono" style="font-weight:600;">${info.cantidad}</span></div>
@@ -1374,12 +1424,50 @@ function mostrarCierre(info, automatico) {
       <div class="report-line top"><span>Gastos de hoy</span><span class="mono" style="color:#E5484D;">− ${money(info.gastosHoy)}</span></div>
       <div class="report-line top bold" style="border-top:1px solid #D8D4CB;"><span>Ganancia neta</span><span class="mono">${money(info.gananciaNeta)}</span></div>
     </div>
-    <div class="hint">${automatico ? "Se cerró solo porque son las 17:15. La cinta de ventas de hoy se vació para arrancar el día siguiente." : "Cierre manual: la cinta de ventas de hoy se vació. El stock no se toca."}</div>
+    <div class="hint">${automatico ? "Se cerró solo porque ya pasaron las 17:30. La cinta de ventas y los gastos de hoy se archivaron en el historial y se vaciaron para el día siguiente." : "Cierre manual: la cinta de ventas y los gastos de hoy se archivaron en el historial y se vaciaron. El stock no se toca."}</div>
     <button class="btn btn-orange" style="width:100%;margin-top:10px;" onclick="aceptarCierre()">Aceptar</button>`);
+
+  // Archivar en el historial de cierres
+  window._ST.historialCierres = [
+    { id: String(Date.now()), fecha: info.fecha, cantidad: info.cantidad, totalVentas: info.totalVentas, totalGanancia: info.totalGanancia, gastosHoy: info.gastosHoy, gananciaNeta: info.gananciaNeta, porMedio: info.porMedio, automatico, hora: nowHora() },
+    ...window._ST.historialCierres
+  ];
+  guardarHistorialCierres();
+
+  // Vaciar la cinta de ventas de hoy
   window._ST.ventasHoy = [];
   guardarVentasHoy();
+
+  // Vaciar los gastos de hoy (ya quedaron archivados en el historial de cierres de arriba)
+  const idsGastosHoy = info.gastosHoyEntries.map((g) => g.id);
+  window._ST.gastos = window._ST.gastos.filter((g) => !idsGastosHoy.includes(g.id));
+  guardarGastos();
 }
 window.aceptarCierre = function () { cerrarModal(); window.renderAll(); };
+
+window.abrirHistorialCierres = function () {
+  const lista = (window._ST.historialCierres || []).slice().sort((a, b) => (b.fecha === a.fecha ? 0 : new Date(b.fecha.split("/").reverse().join("-")) - new Date(a.fecha.split("/").reverse().join("-"))));
+  const filas = lista.length
+    ? lista.map((h) => `
+        <div style="background:#F0EEE8;border-radius:10px;padding:12px 14px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+            <strong style="font-size:13.5px;">${esc(h.fecha)}</strong>
+            <span style="font-size:10.5px;color:#7A7D85;">${h.automatico ? "Automático" : "Manual"} · ${esc(h.hora || "")}</span>
+          </div>
+          <div style="font-size:12.5px;display:flex;flex-direction:column;gap:2px;">
+            <span>Ventas: <strong class="mono">${h.cantidad}</strong> · Total: <strong class="mono">${money(h.totalVentas)}</strong></span>
+            <span style="color:#7A7D85;">💳 ${money(h.porMedio?.tarjeta || 0)} · 💵 ${money(h.porMedio?.efectivo || 0)} · 🏦 ${money(h.porMedio?.transferencia || 0)}</span>
+            <span>Ganancia neta: <strong class="mono" style="color:#2E9C6F;">${money(h.gananciaNeta)}</strong> ${h.gastosHoy ? `<span style="color:#7A7D85;">(gastos: ${money(h.gastosHoy)})</span>` : ""}</span>
+          </div>
+        </div>`).join("")
+    : `<div class="hint">Todavía no se cerró ninguna caja.</div>`;
+  abrirModal(`
+    <h2>📜 Historial de cierres</h2>
+    <div class="hint">Ordenado del más reciente al más viejo.</div>
+    <div style="max-height:60vh;overflow-y:auto;">${filas}</div>
+    <button class="btn btn-ghost" style="width:100%;margin-top:8px;" onclick="cerrarModal()">Cerrar</button>`);
+};
+
 
 // ───────────────────────────── MODALES GENÉRICOS ─────────────────────────────
 function abrirModal(html) {
