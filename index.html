@@ -130,6 +130,7 @@ svg.ic { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2
           <svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg> Cerrar caja
         </button>
         <button class="btn-pill" onclick="abrirHistorialCierres()">📜 Historial</button>
+        <button class="btn-pill" onclick="abrirConfigHoraCierre()">⚙️ <span id="horaCierreLabel"></span></button>
         <button class="btn-pill orange" onclick="abrirCamara()">
           <svg class="ic" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Escanear
         </button>
@@ -199,6 +200,10 @@ onValue(ref(db, `${ROOT}/historialCierres`), (snap) => {
   window._ST.historialCierres = d ? Object.values(d) : [];
   if (window._ready) window.renderAll();
 });
+onValue(ref(db, `${ROOT}/horaCierre`), (snap) => {
+  window._ST.horaCierre = snap.val() || "18:30";
+  window.actualizarLabelHoraCierre && window.actualizarLabelHoraCierre();
+});
 onValue(ref(db, ".info/connected"), (snap) => {
   window._fbOK = snap.val() === true;
 });
@@ -228,6 +233,7 @@ window._ST = {
   gastoTiles: [],
   categorias: [],
   historialCierres: [],
+  horaCierre: "18:30",
   ultimoCierre: null
 };
 window._ready = false;
@@ -318,11 +324,17 @@ function buscarPorCodigo(codigo) {
   return null;
 }
 
+window.actualizarLabelHoraCierre = function () {
+  const el = document.getElementById("horaCierreLabel");
+  if (el) el.textContent = window._ST.horaCierre || "18:30";
+};
+
 window.initApp = function () {
   window._ready = true;
   if (!window._ST.products.length) window._ST.products = window._ST.defaultProducts;
   if (!window._ST.gastoTiles.length) window._ST.gastoTiles = window._ST.defaultGastoTiles;
   window.renderAll();
+  window.actualizarLabelHoraCierre();
   iniciarEscucha();
   setInterval(chequearCierreAutomatico, 30000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") chequearCierreAutomatico(); });
@@ -1395,7 +1407,8 @@ window.cerrarCajaManual = function () { mostrarCierre(calcularCierre(), false); 
 function chequearCierreAutomatico() {
   const ahora = new Date();
   const hoy = ahora.toLocaleDateString("es-AR");
-  const yaPasoLaHora = ahora.getHours() > 17 || (ahora.getHours() === 17 && ahora.getMinutes() >= 30);
+  const [hh, mm] = (window._ST.horaCierre || "18:30").split(":").map(Number);
+  const yaPasoLaHora = ahora.getHours() > hh || (ahora.getHours() === hh && ahora.getMinutes() >= mm);
   if (yaPasoLaHora && window._ST.ultimoCierre !== hoy && window._ST.ventasHoy.length > 0 && !document.getElementById("modalRoot").innerHTML.trim()) {
     mostrarCierre(calcularCierre(), true);
   } else if (yaPasoLaHora && window._ST.ultimoCierre !== hoy && window._ST.ventasHoy.length === 0) {
@@ -1411,7 +1424,7 @@ function mostrarCierre(info, automatico) {
     ? `<div class="report-line"><span>— Sin especificar</span><span class="mono">${money(info.porMedio.sinEspecificar)}</span></div>`
     : "";
   abrirModal(`
-    <h2>${automatico ? "Cierre automático — 17:30" : "Cierre de caja"}</h2>
+    <h2>${automatico ? `Cierre automático — ${window._ST.horaCierre}` : "Cierre de caja"}</h2>
     <div class="hint" style="margin-bottom:16px;">${info.fecha}</div>
     <div class="report-box">
       <div class="report-line"><span>Ventas registradas</span><span class="mono" style="font-weight:600;">${info.cantidad}</span></div>
@@ -1424,7 +1437,7 @@ function mostrarCierre(info, automatico) {
       <div class="report-line top"><span>Gastos de hoy</span><span class="mono" style="color:#E5484D;">− ${money(info.gastosHoy)}</span></div>
       <div class="report-line top bold" style="border-top:1px solid #D8D4CB;"><span>Ganancia neta</span><span class="mono">${money(info.gananciaNeta)}</span></div>
     </div>
-    <div class="hint">${automatico ? "Se cerró solo porque ya pasaron las 17:30. La cinta de ventas y los gastos de hoy se archivaron en el historial y se vaciaron para el día siguiente." : "Cierre manual: la cinta de ventas y los gastos de hoy se archivaron en el historial y se vaciaron. El stock no se toca."}</div>
+    <div class="hint">${automatico ? `Se cerró solo porque ya pasaron las ${window._ST.horaCierre}. La cinta de ventas y los gastos de hoy se archivaron en el historial y se vaciaron para el día siguiente.` : "Cierre manual: la cinta de ventas y los gastos de hoy se archivaron en el historial y se vaciaron. El stock no se toca."}</div>
     <button class="btn btn-orange" style="width:100%;margin-top:10px;" onclick="aceptarCierre()">Aceptar</button>`);
 
   // Archivar en el historial de cierres
@@ -1444,6 +1457,26 @@ function mostrarCierre(info, automatico) {
   guardarGastos();
 }
 window.aceptarCierre = function () { cerrarModal(); window.renderAll(); };
+
+window.abrirConfigHoraCierre = function () {
+  abrirModal(`
+    <h2>⚙️ Hora de cierre automático</h2>
+    <div class="hint">Mientras la app esté abierta, se va a cerrar sola a esta hora todos los días (hora Argentina). La podés cambiar cuando quieras.</div>
+    <label class="lbl">Hora</label>
+    <input type="time" id="horaCierreInput" value="${window._ST.horaCierre || "18:30"}" style="font-size:18px;padding:10px 12px;margin-bottom:14px;">
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-orange" onclick="guardarHoraCierre()">Guardar</button>
+    </div>`);
+};
+window.guardarHoraCierre = function () {
+  const valor = document.getElementById("horaCierreInput").value;
+  if (!valor) return;
+  window._ST.horaCierre = valor;
+  if (window._fbSet) window._fbSet("horaCierre", valor);
+  window.actualizarLabelHoraCierre();
+  cerrarModal();
+};
 
 window.abrirHistorialCierres = function () {
   const lista = (window._ST.historialCierres || []).slice().sort((a, b) => (b.fecha === a.fecha ? 0 : new Date(b.fecha.split("/").reverse().join("-")) - new Date(a.fecha.split("/").reverse().join("-"))));
